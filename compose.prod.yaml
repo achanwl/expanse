@@ -22,7 +22,7 @@ services:
     app:
         depends_on:
             - db
-        image: expanse-awade-v2
+        image: expanse-awade-v3
         logging:
             driver: "json-file"
             options:
@@ -36,7 +36,7 @@ services:
         ports:
             - "1301:1301"
         environment:
-            - VERSION=1.2.13
+            - VERSION=3.0.0
         env_file:
             - ./backend/.env_prod
         entrypoint: []

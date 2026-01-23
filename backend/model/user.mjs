@@ -216,12 +216,15 @@ class User {
 		// Pull history in small bounded chunks to avoid huge upstream queries.
 		const PAGE_LIMIT = 20;
 		const MAX_FETCH = 100;
+		const UPVOTED_MAX_FETCH = Number.parseInt(process.env.UPVOTED_MAX_FETCH) || 500; // Allow deeper walk for upvoted when needed.
 
 		if (category === "upvoted") {
+			const stop_at_fn = this.category_sync_info[category].latest_fn_posts;
 			let after = undefined;
 			const new_items = [];
+			let hit_stop = false;
 
-			while (new_items.length < MAX_FETCH) {
+			while (new_items.length < UPVOTED_MAX_FETCH) {
 				try {
 					const page = await this.fetch_upvoted_page({ before: undefined, after }, PAGE_LIMIT);
 					console.log(`upvoted page after=${after ?? "none"} len=${page.length}`);
@@ -229,7 +232,14 @@ class User {
 						break;
 					}
 
-					new_items.push(...page);
+					const stop_idx = (stop_at_fn ? page.findIndex((item) => item.name === stop_at_fn) : -1);
+					const page_slice = (stop_idx === -1 ? page : page.slice(0, stop_idx));
+					new_items.push(...page_slice);
+					if (stop_idx !== -1) {
+						hit_stop = true;
+						break;
+					}
+
 					after = page[page.length - 1].name;
 				} catch (err) {
 					// If Reddit returns 500 mid-walk, stop early to avoid hammering and rely on next sync.
@@ -237,6 +247,10 @@ class User {
 					logger.error(err);
 					break;
 				}
+			}
+
+			if (new_items.length === UPVOTED_MAX_FETCH && !hit_stop) {
+				logger.warn(`upvoted sync hit UPVOTED_MAX_FETCH (${UPVOTED_MAX_FETCH}) without reaching stored cursor; potential gap beyond ${UPVOTED_MAX_FETCH}`);
 			}
 
 			if (new_items.length > 0) {
